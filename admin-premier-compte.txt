@@ -1,0 +1,6 @@
+-- CRUNCHER : te nommer administrateur
+-- Remplace TON_COURRIEL par le courriel de ton compte, puis Run.
+
+insert into public.cr_profils (id, courriel, nom, est_admin)
+select id, email, 'Mathieu', true from auth.users where lower(email) = lower('TON_COURRIEL')
+on conflict (id) do update set est_admin = true;

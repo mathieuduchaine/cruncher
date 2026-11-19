@@ -1,0 +1,104 @@
+-- CRUNCHER : installation de la base de données
+-- À coller au complet dans Supabase > SQL Editor > New query > Run
+-- Toutes les tables commencent par cr_ : le script peut tourner dans un projet
+-- Supabase neuf ou dans un projet existant sans rien toucher d'autre.
+
+create table if not exists public.cr_profils (
+  id uuid primary key references auth.users(id) on delete cascade,
+  courriel text not null,
+  nom text,
+  est_admin boolean not null default false,
+  reglages jsonb not null default '{}'::jsonb,
+  cree_le timestamptz not null default now()
+);
+
+create table if not exists public.cr_immeubles (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.cr_profils(id) on delete cascade default auth.uid(),
+  nom text not null default 'Nouvel immeuble',
+  ville text,
+  statut text not null default 'À analyser',
+  donnees jsonb not null default '{}'::jsonb,
+  cree_le timestamptz not null default now(),
+  modifie_le timestamptz not null default now()
+);
+create index if not exists cr_immeubles_user_idx on public.cr_immeubles(user_id);
+
+create or replace function public.cr_est_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((select est_admin from public.cr_profils where id = auth.uid()), false);
+$$;
+
+create or replace function public.cr_a_acces() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from public.cr_profils where id = auth.uid());
+$$;
+
+-- Utilisée seulement par le serveur (invitation d'un compte qui existe déjà)
+create or replace function public.cr_id_par_courriel(p_courriel text) returns uuid
+language sql stable security definer set search_path = public, auth as $$
+  select id from auth.users where lower(email) = lower(p_courriel) limit 1;
+$$;
+revoke all on function public.cr_id_par_courriel(text) from public, anon, authenticated;
+grant execute on function public.cr_id_par_courriel(text) to service_role;
+
+create or replace function public.cr_touche() returns trigger language plpgsql as $$
+begin new.modifie_le = now(); return new; end; $$;
+drop trigger if exists cr_immeubles_touche on public.cr_immeubles;
+create trigger cr_immeubles_touche before update on public.cr_immeubles
+  for each row execute function public.cr_touche();
+
+alter table public.cr_profils enable row level security;
+alter table public.cr_immeubles enable row level security;
+
+drop policy if exists cr_profils_lire on public.cr_profils;
+create policy cr_profils_lire on public.cr_profils for select
+  using (id = auth.uid() or public.cr_est_admin());
+drop policy if exists cr_profils_modifier on public.cr_profils;
+create policy cr_profils_modifier on public.cr_profils for update
+  using (id = auth.uid() or public.cr_est_admin());
+drop policy if exists cr_profils_retirer on public.cr_profils;
+create policy cr_profils_retirer on public.cr_profils for delete
+  using (public.cr_est_admin() and id <> auth.uid());
+
+-- Empêche un utilisateur de se nommer admin lui-même
+create or replace function public.cr_protege_admin() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.est_admin is distinct from old.est_admin and not public.cr_est_admin() and auth.uid() is not null then
+    new.est_admin = old.est_admin;
+  end if;
+  return new;
+end; $$;
+drop trigger if exists cr_profils_protege on public.cr_profils;
+create trigger cr_profils_protege before update on public.cr_profils
+  for each row execute function public.cr_protege_admin();
+
+drop policy if exists cr_imm_lire on public.cr_immeubles;
+create policy cr_imm_lire on public.cr_immeubles for select
+  using ((user_id = auth.uid() and public.cr_a_acces()) or public.cr_est_admin());
+drop policy if exists cr_imm_ajouter on public.cr_immeubles;
+create policy cr_imm_ajouter on public.cr_immeubles for insert
+  with check (user_id = auth.uid() and public.cr_a_acces());
+drop policy if exists cr_imm_modifier on public.cr_immeubles;
+create policy cr_imm_modifier on public.cr_immeubles for update
+  using ((user_id = auth.uid() and public.cr_a_acces()) or public.cr_est_admin());
+drop policy if exists cr_imm_effacer on public.cr_immeubles;
+create policy cr_imm_effacer on public.cr_immeubles for delete
+  using ((user_id = auth.uid() and public.cr_a_acces()) or public.cr_est_admin());
+
+-- Fiches PDF des immeubles (privées : chaque compte dans son dossier)
+insert into storage.buckets (id, name, public) values ('cr-fiches', 'cr-fiches', false)
+  on conflict (id) do nothing;
+
+drop policy if exists cr_fiches_lire on storage.objects;
+create policy cr_fiches_lire on storage.objects for select
+  using (bucket_id = 'cr-fiches' and ((storage.foldername(name))[1] = auth.uid()::text or public.cr_est_admin()));
+drop policy if exists cr_fiches_ajouter on storage.objects;
+create policy cr_fiches_ajouter on storage.objects for insert
+  with check (bucket_id = 'cr-fiches' and (storage.foldername(name))[1] = auth.uid()::text and public.cr_a_acces());
+drop policy if exists cr_fiches_modifier on storage.objects;
+create policy cr_fiches_modifier on storage.objects for update
+  using (bucket_id = 'cr-fiches' and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists cr_fiches_effacer on storage.objects;
+create policy cr_fiches_effacer on storage.objects for delete
+  using (bucket_id = 'cr-fiches' and ((storage.foldername(name))[1] = auth.uid()::text or public.cr_est_admin()));
