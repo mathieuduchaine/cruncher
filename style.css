@@ -1,12 +1,13 @@
 :root {
-  --fond: #0f1115; --surface: #171a21; --surface2: #1e222b; --bord: #2a2f3a;
-  --texte: #e8e6e1; --doux: #9aa0aa; --or: #d4a24c; --or-fonce: #a87a2c;
-  --bon: #4caf7d; --moyen: #d4a24c; --faible: #d9604c;
+  --fond: #011637; --surface: #04224f; --surface2: #0a2c60; --bord: #17386e;
+  --texte: #f9f9fa; --doux: #9fb0cc; --or: #dbb777; --or-clair: #f1d491; --or-fonce: #c79c5c;
+  --degrade-or: linear-gradient(135deg, #f1d491 0%, #dbb777 50%, #c79c5c 100%);
+  --bon: #5fc492; --moyen: #f1d491; --faible: #ec7a63;
   --rayon: 10px;
   --police: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, system-ui, sans-serif;
 }
 * { box-sizing: border-box; }
-html, body { margin: 0; background: var(--fond); color: var(--texte); font-family: var(--police); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+html, body { margin: 0; background: var(--fond) radial-gradient(ellipse at 50% -20%, #0a2d63 0%, var(--fond) 60%) fixed; color: var(--texte); font-family: var(--police); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
 body { padding-bottom: env(safe-area-inset-bottom); }
 a { color: var(--or); text-decoration: none; }
 h1 { font-size: 1.55rem; margin: 2px 0; font-weight: 650; letter-spacing: -0.01em; }
@@ -28,8 +29,8 @@ code { background: var(--surface2); padding: 1px 6px; border-radius: 4px; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid var(--bord); background: var(--surface2); color: var(--texte); padding: 8px 14px; border-radius: 8px; font: inherit; font-size: 0.9rem; cursor: pointer; white-space: nowrap; }
 .btn:hover:not(:disabled) { border-color: var(--or-fonce); }
 .btn:disabled { opacity: 0.45; cursor: default; }
-.btn.principal { background: var(--or); color: #17140e; border-color: var(--or); font-weight: 600; }
-.btn.principal:hover { background: #e0b25e; }
+.btn.principal { background: var(--degrade-or); color: #011637; border-color: var(--or-fonce); font-weight: 650; }
+.btn.principal:hover { filter: brightness(1.07); }
 .btn.danger { color: var(--faible); }
 .btn.mini { padding: 4px 10px; font-size: 0.8rem; }
 .btn.fantome { background: transparent; border-color: transparent; color: var(--doux); }
@@ -37,9 +38,9 @@ code { background: var(--surface2); padding: 1px 6px; border-radius: 4px; }
 .lien { background: none; border: 0; color: var(--or); font: inherit; font-size: 0.88rem; cursor: pointer; padding: 0; }
 
 /* Champs */
-input, select, textarea { font: inherit; color: var(--texte); background: var(--fond); border: 1px solid var(--bord); border-radius: 7px; padding: 8px 10px; width: 100%; }
+input, select, textarea { font: inherit; color: var(--texte); background: #011a40; border: 1px solid var(--bord); border-radius: 7px; padding: 8px 10px; width: 100%; }
 input:focus, select:focus, textarea:focus { outline: none; border-color: var(--or); }
-input::placeholder, textarea::placeholder { color: #5d636d; }
+input::placeholder, textarea::placeholder { color: #5f7399; }
 input:disabled { opacity: 0.6; }
 input[type=checkbox] { width: 17px; height: 17px; accent-color: var(--or); padding: 0; }
 label { display: block; }
@@ -69,7 +70,7 @@ label { display: block; }
 .liste-simple { margin: 0; padding-left: 18px; }
 
 /* Coquille */
-.entete { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 24px; padding: 12px 24px; padding-top: max(12px, env(safe-area-inset-top)); background: rgba(15, 17, 21, 0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--bord); }
+.entete { position: sticky; top: 0; z-index: 10; display: flex; align-items: center; gap: 24px; padding: 12px 24px; padding-top: max(12px, env(safe-area-inset-top)); background: rgba(0, 22, 55, 0.94); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--bord); }
 .entete nav { display: flex; gap: 4px; }
 .entete nav a { color: var(--doux); padding: 6px 12px; border-radius: 7px; font-size: 0.9rem; }
 .entete nav a.actif, .entete nav a:hover { color: var(--texte); background: var(--surface2); }
@@ -103,9 +104,9 @@ main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
 .mini-note { font-size: 0.7rem; }
 
 .pastille { display: inline-block; padding: 2px 8px; border-radius: 20px; font-weight: 600; font-size: 0.86rem; }
-.pastille.bon { background: rgba(76, 175, 125, 0.14); color: var(--bon); }
-.pastille.moyen { background: rgba(212, 162, 76, 0.14); color: var(--moyen); }
-.pastille.faible { background: rgba(217, 96, 76, 0.14); color: var(--faible); }
+.pastille.bon { background: rgba(95, 196, 146, 0.15); color: var(--bon); }
+.pastille.moyen { background: rgba(241, 212, 145, 0.14); color: var(--moyen); }
+.pastille.faible { background: rgba(236, 122, 99, 0.15); color: var(--faible); }
 .statut { font-size: 0.78rem; padding: 2px 8px; border-radius: 20px; background: var(--surface2); color: var(--doux); white-space: nowrap; }
 .statut.s-3 { color: var(--or); }
 .statut.s-6 { color: var(--bon); }
@@ -153,7 +154,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
 .fichier { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
 
 /* Voile et toast */
-#voile { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: grid; place-items: center; z-index: 50; }
+#voile { position: fixed; inset: 0; background: rgba(0, 10, 28, 0.7); display: grid; place-items: center; z-index: 50; }
 #voile[hidden] { display: none; }
 .voile-boite { background: var(--surface); border: 1px solid var(--bord); border-radius: 12px; padding: 26px 32px; text-align: center; max-width: 320px; }
 .roue { width: 34px; height: 34px; border: 3px solid var(--bord); border-top-color: var(--or); border-radius: 50%; margin: 0 auto 12px; animation: tourne 0.9s linear infinite; }
@@ -180,3 +181,19 @@ main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
 .champs > *, .colonne, .carte, .scenario { min-width: 0; }
 .carte { overflow: hidden; }
 .carte .defile { margin: 0 -4px; }
+
+/* Identité Gestion Clevor */
+.logo { display: inline-flex; align-items: center; gap: 14px; }
+.logo-img { height: 34px; width: auto; display: block; }
+.logo-app { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.28em; color: var(--or); padding-left: 14px; border-left: 1px solid var(--bord); }
+.porte-boite .logo { flex-direction: column; gap: 10px; }
+.porte-boite .logo-img { height: auto; width: 100%; max-width: 300px; }
+.porte-boite .logo-app { border-left: 0; padding-left: 0; font-size: 0.8rem; }
+.porte-boite { background: rgba(4, 34, 79, 0.85); box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35); }
+.carte, .kpi, .verdict { box-shadow: 0 1px 0 rgba(241, 212, 145, 0.04) inset; }
+.carte h2 { color: var(--texte); }
+.carte h2::before { content: ""; display: inline-block; width: 3px; height: 0.95em; background: var(--degrade-or); border-radius: 2px; margin-right: 9px; vertical-align: -0.12em; }
+.kpi strong { color: var(--texte); }
+.entete nav a.actif { color: var(--or-clair); }
+.grille th.trie, .scenario h3 { color: var(--or); }
+@media (max-width: 640px) { .logo-img { height: 26px; } .logo-app { display: none; } }

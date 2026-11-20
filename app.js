@@ -5,6 +5,12 @@ const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs
 const PDFJS_WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
 const TYPES = ['1½', '2½', '3½', '4½', '5½', '6½', '7½', '8½', 'Maison', 'Commercial', 'Garage', 'Stationnement'];
 
+let logoPdf = null;
+fetch('logo-clevor-pdf.jpg').then(r => r.ok ? r.blob() : null).then(b => {
+  if (!b) return;
+  const fr = new FileReader(); fr.onload = () => { logoPdf = fr.result; }; fr.readAsDataURL(b);
+}).catch(() => {});
+
 const etat = {
   sb: null, session: null, profil: null, immeubles: [], profils: [],
   courant: null, tri: { col: 'modifie_le', dir: -1 }, selection: new Set(),
@@ -73,11 +79,11 @@ function ecranConfig(cfg) {
     <p class="discret">Après les avoir ajoutées, fais Redeploy dans Vercel.</p></div></div>`;
 }
 
-function logo() { return `<div class="logo"><span class="logo-marque">▲</span><span>CRUNCHER</span></div>`; }
+function logo() { return `<div class="logo"><img class="logo-img" src="logo-clevor.png" alt="Gestion Clevor"><span class="logo-app">CRUNCHER</span></div>`; }
 
 function ecranConnexion(message = '') {
   app.innerHTML = `<div class="porte"><form class="porte-boite" id="f-connexion">${logo()}
-    <p class="discret centre">Analyse d'immeubles à revenus</p>
+    <p class="discret centre petit">Analyse d'immeubles à revenus</p>
     ${message ? `<p class="message">${esc(message)}</p>` : ''}
     <label>Courriel<input type="email" name="courriel" autocomplete="username" required></label>
     <label>Mot de passe<input type="password" name="mdp" autocomplete="current-password" required></label>
@@ -470,7 +476,7 @@ async function vueFiche(id) {
   });
   $('#b-rapport').onclick = () => {
     flush();
-    try { genererRapport(etat.courant, analyser(etat.courant.donnees, etat.profil.reglages), etat.profil); }
+    try { genererRapport(etat.courant, analyser(etat.courant.donnees, etat.profil.reglages), etat.profil, logoPdf); }
     catch (e) { toast('Rapport impossible : ' + e.message, 5000); }
   };
   $('#b-dupliquer').onclick = async () => {

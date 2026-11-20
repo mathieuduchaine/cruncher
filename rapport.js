@@ -6,28 +6,34 @@ const $ = (v, dec = 0) => isFinite(v) ? p(Number(v).toLocaleString('fr-CA', { mi
 const pc = (v, dec = 2) => isFinite(v) && v ? p(Number(v).toLocaleString('fr-CA', { minimumFractionDigits: dec, maximumFractionDigits: dec })) + ' %' : '-';
 const nm = (v, dec = 2) => isFinite(v) && v ? p(Number(v).toLocaleString('fr-CA', { minimumFractionDigits: dec, maximumFractionDigits: dec })) : '-';
 
-const ENCRE = [24, 28, 36], DOUX = [110, 116, 128], OR = [176, 128, 44], FOND = [244, 242, 237];
+const ENCRE = [1, 29, 69], DOUX = [104, 116, 138], OR = [184, 140, 74], OR_CLAIR = [241, 212, 145], FOND = [243, 241, 235];
 const COTE = { bon: [46, 125, 82], moyen: [176, 128, 44], faible: [178, 64, 50] };
 
-export function genererRapport(imm, a, profil) {
+export function genererRapport(imm, a, profil, logo) {
   if (!window.jspdf || !window.jspdf.jsPDF) throw new Error('Bibliothèque PDF non chargée. Vérifie ta connexion.');
   const doc = new window.jspdf.jsPDF({ unit: 'pt', format: 'letter' });
   const d = imm.donnees || {};
   const L = doc.internal.pageSize.getWidth(), M = 40;
   let y = 0;
 
-  // En-tête
-  doc.setFillColor(...ENCRE); doc.rect(0, 0, L, 92, 'F');
-  doc.setTextColor(...OR); doc.setFont('helvetica', 'bold'); doc.setFontSize(9);
-  doc.text('CRUNCHER  ·  ANALYSE D\'IMMEUBLE À REVENUS', M, 30);
-  doc.setTextColor(255, 255, 255); doc.setFontSize(20);
-  doc.text(p(d.nom || imm.nom || 'Immeuble'), M, 56, { maxWidth: L - 2 * M });
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(200, 200, 205);
+  // En-tête aux couleurs de Gestion Clevor
+  doc.setFillColor(...ENCRE); doc.rect(0, 0, L, 74, 'F');
+  doc.setFillColor(...OR_CLAIR); doc.rect(0, 74, L, 2, 'F');
+  if (logo) {
+    try { const pr = doc.getImageProperties(logo); const h = 50; doc.addImage(logo, 'JPEG', M - 10, 12, h * pr.width / pr.height, h); }
+    catch { doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('GESTION CLEVOR', M, 44); }
+  } else { doc.setTextColor(255, 255, 255); doc.setFont('helvetica', 'bold'); doc.setFontSize(16); doc.text('GESTION CLEVOR', M, 44); }
+  doc.setTextColor(...OR_CLAIR); doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+  doc.text('CRUNCHER  ·  ANALYSE D\'IMMEUBLE À REVENUS', L - M, 32, { align: 'right' });
+  doc.setTextColor(205, 214, 230); doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  doc.text(p(`Préparé par ${profil.nom || profil.courriel} le ${new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}`), L - M, 47, { align: 'right' });
+
+  doc.setTextColor(...ENCRE); doc.setFont('helvetica', 'bold'); doc.setFontSize(19);
+  doc.text(p(d.nom || imm.nom || 'Immeuble'), M, 106, { maxWidth: L - 2 * M });
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(...DOUX);
   const sous = [d.adresse, d.adresse && d.ville && String(d.adresse).includes(d.ville) ? '' : d.ville, d.annee ? `construit en ${d.annee}` : '', d.uls ? `ULS ${d.uls}` : ''].filter(Boolean).join('  ·  ');
-  doc.text(p(sous), M, 74, { maxWidth: L - 2 * M });
-  doc.setFontSize(8.5);
-  doc.text(p(`Préparé par ${profil.nom || profil.courriel} le ${new Date().toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' })}`), L - M, 30, { align: 'right' });
-  y = 112;
+  doc.text(p(sous), M, 122, { maxWidth: L - 2 * M });
+  y = 138;
 
   // Indicateurs
   const kpis = [
@@ -199,7 +205,7 @@ export function genererRapport(imm, a, profil) {
   for (let i = 1; i <= n; i++) {
     doc.setPage(i);
     doc.setFontSize(7.5); doc.setTextColor(...DOUX);
-    doc.text(p(`Cruncher · ${d.nom || imm.nom}`), M, doc.internal.pageSize.getHeight() - 22);
+    doc.text(p(`Gestion Clevor · Cruncher · ${d.nom || imm.nom}`), M, doc.internal.pageSize.getHeight() - 22);
     doc.text(`${i} / ${n}`, L - M, doc.internal.pageSize.getHeight() - 22, { align: 'right' });
   }
 
