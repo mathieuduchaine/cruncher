@@ -13,6 +13,7 @@ Retourne UNIQUEMENT un objet JSON valide, sans texte autour, avec ces clés. Met
   "prix_demande": nombre,
   "evaluation": nombre (évaluation municipale totale),
   "nb_logements": nombre,
+  "superficie": nombre (superficie habitable totale du bâtiment en pieds carrés; convertis les m² en pi² en multipliant par 10,764),
   "logements": [ { "type": "4½", "loyer": nombre mensuel ou null, "bail": "échéance du bail si indiquée ou null" } ],
   "rba_fiche": nombre (revenus bruts annuels totaux indiqués),
   "autres_revenus": nombre annuel (stationnement, buanderie, etc., seulement s'ils sont séparés des loyers),
