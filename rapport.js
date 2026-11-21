@@ -36,24 +36,31 @@ export function genererRapport(imm, a, profil, logo) {
   y = 138;
 
   // Indicateurs
-  const kpis = [
-    ['Prix analysé', $(a.prix), `${a.n || '-'} logements`, null],
-    ['Prix par porte', $(a.prixPorte), a.prixDemande && a.prixDemande !== a.prix ? `Demandé : ${$(a.prixDemande)}` : '', null],
-    ['TGA', pc(a.tga), `RNE ${$(a.rne)}`, a.cote.tga],
-    ['MRB', nm(a.mrb), `MRN ${nm(a.mrn)}`, a.cote.mrb],
-    ['Liquidités SCHL', $(a.fin.schl.cfPorteMois), 'par porte par mois', a.cote.cf],
-    ['Argent requis', $(a.fin.schl.cash), 'SCHL, mise + frais', null]
-  ];
-  const lk = (L - 2 * M - 5 * 8) / 6;
-  kpis.forEach(([t, v, s, c], k) => {
-    const x = M + k * (lk + 8);
-    doc.setFillColor(...FOND); doc.roundedRect(x, y, lk, 58, 4, 4, 'F');
-    if (c) { doc.setFillColor(...COTE[c]); doc.rect(x, y + 6, 2.5, 46, 'F'); }
-    doc.setTextColor(...DOUX); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.text(p(t).toUpperCase(), x + 9, y + 15);
-    doc.setTextColor(...ENCRE); doc.setFontSize(12.5); doc.setFont('helvetica', 'bold'); doc.text(p(v), x + 9, y + 34);
-    doc.setTextColor(...DOUX); doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.text(p(s), x + 9, y + 48, { maxWidth: lk - 12 });
-  });
-  y += 76;
+  const P = a.principal;
+  const rangees = [[
+    ['Prix analysé', $(a.prix), `${a.n || '-'} logements · ${$(a.prixPorte)}/porte`, null],
+    ['RNE', $(a.rne), `${$(a.rnePorte)} par porte`, null],
+    ['TGA', pc(a.tga), 'taux global', a.cote.tga],
+    ['MRB', nm(a.mrb), `MRN ${nm(a.mrn)}`, a.cote.mrb]
+  ], [
+    ['RCD ' + P.nom, a.rne ? (P.passe ? 'Passe' : 'Ne passe pas') : '-', `${nm(P.rcdAuMax)} à ${pc(P.ltv, 0)} · exigé ${nm(P.rcd)}`, a.cote.rcd],
+    ['Cash flow net', $(P.cfMois) + '/mois', `${$(P.cfPorteMois)} par porte par mois`, P.cfMois < 0 ? 'faible' : a.cote.cf],
+    ['Argent requis', $(P.cash), `mise de ${pc(P.misePct, 1)} + frais`, null],
+    ['TRI sur 10 ans', P.tri === null ? '-' : pc(P.tri, 1), `occupation min. ${pc(P.pointMort, 1)}`, null]
+  ]];
+  const lk = (L - 2 * M - 3 * 8) / 4;
+  for (const rangee of rangees) {
+    rangee.forEach(([t, v, s2, c], k) => {
+      const x = M + k * (lk + 8);
+      doc.setFillColor(...FOND); doc.roundedRect(x, y, lk, 54, 4, 4, 'F');
+      if (c) { doc.setFillColor(...COTE[c]); doc.rect(x, y + 6, 2.5, 42, 'F'); }
+      doc.setTextColor(...DOUX); doc.setFontSize(7.5); doc.setFont('helvetica', 'normal'); doc.text(p(t).toUpperCase(), x + 9, y + 14);
+      doc.setTextColor(...(c ? COTE[c] : ENCRE)); doc.setFontSize(13); doc.setFont('helvetica', 'bold'); doc.text(p(v), x + 9, y + 32);
+      doc.setTextColor(...DOUX); doc.setFontSize(7); doc.setFont('helvetica', 'normal'); doc.text(p(s2), x + 9, y + 45, { maxWidth: lk - 12 });
+    });
+    y += 62;
+  }
+  y += 10;
 
   // Verdict
   doc.setTextColor(...ENCRE); doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5);
@@ -122,6 +129,7 @@ export function genererRapport(imm, a, profil, logo) {
     ...style, startY: y,
     head: [['', ...SCENARIOS.map(s => s.nom)]],
     body: [
+      r('Au prêt maximal', x => x.passe ? `Passe (RCD ${nm(x.rcdAuMax)})` : `Ne passe pas (RCD ${nm(x.rcdAuMax)})`, gras),
       r('Taux, amortissement', x => `${pc(x.taux)} · ${x.amort} ans`),
       r('RCD exigé, prêt max', x => `${nm(x.rcd)} · ${pc(x.ltv, 0)}`),
       r('Prêt', x => $(x.pret)),
@@ -129,17 +137,50 @@ export function genererRapport(imm, a, profil, logo) {
       r('Prime SCHL ajoutée', x => x.prime ? $(x.prime) : '-'),
       r('Paiement mensuel', x => $(x.paiementMensuel)),
       r('Mise de fonds', x => `${$(x.mise)} (${pc(x.misePct, 1)})`),
+      r('dont mise en plus (RCD)', x => x.miseSupplementaire > 0 ? $(x.miseSupplementaire) : '-'),
       r('Taxe de bienvenue', () => $(a.dmi)),
       r('Frais divers et travaux', () => $(a.fraisDivers + a.travaux)),
       r('Argent requis', x => $(x.cash), gras),
-      r('Liquidités annuelles', x => $(x.liquidites)),
+      r('Cash flow net mensuel', x => $(x.cfMois), gras),
+      r('Cash flow net annuel', x => $(x.liquidites)),
       r('Par porte par mois', x => $(x.cfPorteMois)),
       r('RCD réel', x => nm(x.rcdReel)),
       r('Rendement sur liquidités', x => pc(x.rendLiquidites, 1)),
       r('Capitalisation an 1', x => $(x.capitalisation)),
-      r('Rendement total an 1', x => pc(x.rendTotal, 1), { ...gras, textColor: OR })
+      r('Occupation minimale (point mort)', x => pc(x.pointMort, 1)),
+      r('Rendement total an 1', x => pc(x.rendTotal, 1)),
+      r('TRI sur 10 ans', x => x.tri === null ? '-' : pc(x.tri, 1), { ...gras, textColor: OR }),
+      r('Multiple du capital', x => nm(x.multiple) + ' x'),
+      r('Récupération de la mise', x => x.recuperation ? x.recuperation + ' ans' : 'plus de 10 ans')
     ],
     columnStyles: { 0: { cellWidth: 150 }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+  });
+  apres();
+
+  // Tests de résistance
+  titre(`Tests de résistance (${P.nom})`);
+  doc.autoTable({
+    ...style, startY: y,
+    head: [['Scénario', 'Cash flow /an', 'Par porte /mois', 'RCD']],
+    body: [
+      [{ content: 'Situation de base', styles: gras }, { content: $(P.liquidites), styles: gras }, { content: $(P.cfPorteMois), styles: gras }, { content: nm(P.rcdReel), styles: gras }],
+      ...P.stress.map(x => [p(x.nom), $(x.cf), $(x.cfPorteMois), { content: nm(x.rcd), styles: { textColor: x.rcd < P.rcd ? COTE.faible : COTE.bon } }])
+    ],
+    columnStyles: { 0: { cellWidth: 230 }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } }
+  });
+  apres();
+
+  // Ratios
+  titre('Ratios');
+  doc.autoTable({
+    ...style, startY: y,
+    body: [
+      ['Revenus par porte', $(a.revenusPorte) + ' /an', 'Loyer moyen', $(a.loyerMoyenActuel) + ' /mois'],
+      ['Dépenses par porte', $(a.depPorte) + ' /an', 'Ratio des dépenses', pc(a.ratioDep, 1)],
+      ['RNE par porte', $(a.rnePorte) + ' /an', 'Prix au pi²', a.prixPi2 ? $(a.prixPi2) : '-'],
+      ['Prix ÷ évaluation', a.prixEval ? nm(a.prixEval) + ' x' : '-', 'Coût total d\'acquisition', $(a.coutTotal)]
+    ],
+    columnStyles: { 0: { textColor: DOUX }, 1: { halign: 'right', fontStyle: 'bold' }, 2: { textColor: DOUX }, 3: { halign: 'right', fontStyle: 'bold' } }
   });
   apres();
 

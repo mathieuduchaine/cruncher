@@ -194,14 +194,14 @@ function lignesListe() {
   const q = etat.recherche.toLowerCase();
   let lignes = etat.immeubles.map(i => {
     const a = analyser(i.donnees || {}, reg);
-    return { i, a, s: a.fin.schl };
+    return { i, a, s: a.principal };
   }).filter(({ i }) =>
     (!q || `${i.nom} ${i.ville} ${(i.donnees || {}).adresse || ''}`.toLowerCase().includes(q)) &&
     (!etat.filtreStatut || i.statut === etat.filtreStatut) &&
     (!etat.filtreProprio || i.user_id === etat.filtreProprio));
   const cles = {
     nom: x => x.i.nom.toLowerCase(), statut: x => x.i.statut, portes: x => x.a.n, prix: x => x.a.prix,
-    porte: x => x.a.prixPorte, mrb: x => x.a.mrb || 999, tga: x => x.a.tga, cf: x => x.s.cfPorteMois,
+    porte: x => x.a.prixPorte, mrb: x => x.a.mrb || 999, tga: x => x.a.tga, cf: x => x.s.cfPorteMois, cfm: x => x.s.cfMois, rcd: x => x.s.rcdAuMax,
     cash: x => x.s.cash, proprio: x => proprio(x.i.user_id), modifie_le: x => x.i.modifie_le
   };
   const f = cles[etat.tri.col] || cles.modifie_le;
@@ -246,7 +246,7 @@ function dessinerTableau() {
   const col = (cle, nom, cls = '') => `<th class="${cls} triable ${etat.tri.col === cle ? 'trie' : ''}" data-tri="${cle}">${nom}${etat.tri.col === cle ? (etat.tri.dir > 0 ? ' ↑' : ' ↓') : ''}</th>`;
   const c = (cote, txt) => `<span class="pastille ${cote}">${txt}</span>`;
   t.innerHTML = `<div class="defile"><table class="grille">
-    <thead><tr><th class="case"></th>${col('nom', 'Immeuble')}${col('statut', 'Statut')}${col('portes', 'Portes', 'num')}${col('prix', 'Prix', 'num')}${col('porte', '$/porte', 'num')}${col('mrb', 'MRB', 'num')}${col('tga', 'TGA', 'num')}${col('cf', 'Liq./porte/mois*', 'num')}${col('cash', 'Mise totale*', 'num')}${admin ? col('proprio', 'Compte') : ''}${col('modifie_le', 'Modifié', 'num')}</tr></thead>
+    <thead><tr><th class="case"></th>${col('nom', 'Immeuble')}${col('statut', 'Statut')}${col('portes', 'Portes', 'num')}${col('prix', 'Prix', 'num')}${col('porte', '$/porte', 'num')}${col('mrb', 'MRB', 'num')}${col('tga', 'TGA', 'num')}${col('rcd', 'RCD*', 'num')}${col('cfm', 'Cash flow/mois*', 'num')}${col('cf', 'Par porte*', 'num')}${col('cash', 'Mise totale*', 'num')}${admin ? col('proprio', 'Compte') : ''}${col('modifie_le', 'Modifié', 'num')}</tr></thead>
     <tbody>${lignes.map(({ i, a, s }) => `<tr data-id="${i.id}">
       <td class="case"><input type="checkbox" data-sel="${i.id}" ${etat.selection.has(i.id) ? 'checked' : ''} aria-label="Sélectionner"></td>
       <td><strong>${esc(i.nom)}</strong><div class="discret petit">${esc(i.ville || '')}</div></td>
@@ -256,12 +256,14 @@ function dessinerTableau() {
       <td class="num">${a.prixPorte ? argent(a.prixPorte) : '—'}</td>
       <td class="num">${a.mrb ? c(a.cote.mrb, nombre(a.mrb)) : '—'}</td>
       <td class="num">${a.tga ? c(a.cote.tga, pct(a.tga)) : '—'}</td>
+      <td class="num">${a.rne ? c(a.cote.rcd, nombre(s.rcdAuMax)) : '—'}</td>
+      <td class="num">${a.rne ? argent(s.cfMois) : '—'}</td>
       <td class="num">${a.rne ? c(a.cote.cf, argent(s.cfPorteMois)) : '—'}</td>
       <td class="num">${a.prix ? argent(s.cash) : '—'}</td>
       ${admin ? `<td class="petit">${esc(proprio(i.user_id))}</td>` : ''}
       <td class="num petit discret">${dateCourte(i.modifie_le)}</td>
     </tr>`).join('')}</tbody></table></div>
-    <p class="discret petit">* Scénario SCHL standard. Clique un en-tête pour trier. Coche des immeubles pour les comparer.</p>`;
+    <p class="discret petit">* Selon ton scénario principal (Réglages). RCD au ratio prêt-valeur maximal : vert si ça passe. Clique un en-tête pour trier. Coche des immeubles pour les comparer.</p>`;
   t.querySelectorAll('th[data-tri]').forEach(th => th.onclick = () => {
     const cle = th.dataset.tri;
     etat.tri = { col: cle, dir: etat.tri.col === cle ? -etat.tri.dir : (cle === 'nom' || cle === 'mrb' || cle === 'cash' || cle === 'porte' ? 1 : -1) };
@@ -321,7 +323,7 @@ function nettoyer(x) {
   const num = v => (v === null || v === undefined || v === '' || isNaN(nb(v))) ? '' : nb(v);
   const txt = v => (v === null || v === undefined) ? '' : String(v);
   for (const k of ['nom', 'adresse', 'ville', 'uls', 'courtier', 'notes']) d[k] = txt(x[k]);
-  for (const k of ['annee', 'prix_demande', 'evaluation', 'nb_logements', 'rba_fiche', 'autres_revenus']) d[k] = num(x[k]);
+  for (const k of ['annee', 'prix_demande', 'evaluation', 'nb_logements', 'rba_fiche', 'autres_revenus', 'superficie']) d[k] = num(x[k]);
   d.revenus_potentiels = !!x.revenus_potentiels;
   d.dep = {};
   for (const p of POSTES_DEPENSES) d.dep[p.cle] = num((x.dep || {})[p.cle]);
@@ -412,6 +414,7 @@ async function vueFiche(id) {
           ${ch('uls', 'No ULS / Centris', { type: 't' })}
           ${ch('courtier', 'Courtier', { type: 't' })}
           ${ch('annee', 'Année de construction', { brut: true })}
+          ${ch('superficie', 'Superficie habitable', { suf: 'pi²' })}
           ${ch('evaluation', 'Évaluation municipale', { suf: '$' })}
           ${ch('prix_demande', 'Prix demandé', { suf: '$' })}
           ${ch('prix_offre', 'Prix analysé', { suf: '$', ph: 'Prix demandé', aide: 'Laisse vide pour analyser au prix demandé. Entre ton prix d\'offre pour voir ce qu\'il donne.' })}
@@ -426,6 +429,8 @@ async function vueFiche(id) {
           <tfoot id="pied-depenses"></tfoot></table></div>
         </section>
 
+        <section class="carte" id="s-ratios"></section>
+
         <section class="carte"><h2>Hypothèses de cet immeuble</h2>
           <p class="discret petit">Laisse vide pour utiliser tes réglages par défaut (affichés en gris).</p>
           <div class="champs">
@@ -439,6 +444,7 @@ async function vueFiche(id) {
             ${ch('hyp.appreciation', 'Appréciation annuelle', { suf: '%', ph: champNombre(R.hyp.appreciation) })}
             ${ch('hyp.hausse_loyers', 'Hausse des loyers par an', { suf: '%', ph: champNombre(R.hyp.hausse_loyers) })}
             ${ch('hyp.hausse_depenses', 'Hausse des dépenses par an', { suf: '%', ph: champNombre(R.hyp.hausse_depenses) })}
+            ${ch('hyp.frais_vente', 'Frais de revente (TRI)', { suf: '%', ph: champNombre(R.hyp.frais_vente) })}
           </div>
         </section>
 
@@ -453,6 +459,7 @@ async function vueFiche(id) {
           <p class="discret petit">L'APH Select exige des travaux d'efficacité énergétique et un pointage suffisant. Valide avec ton prêteur.</p>
         </section>
 
+        <section class="carte" id="s-stress"></section>
         <section class="carte" id="s-offre"></section>
         <section class="carte" id="s-projection"></section>
 
@@ -581,17 +588,49 @@ function majResultats() {
   const imm = etat.courant;
   const a = analyser(imm.donnees, etat.profil.reglages);
   const c = (cote, txt) => `<span class="pastille ${cote}">${txt}</span>`;
-  const s = a.fin.schl;
+  const s = a.principal;
+  const triTxt = v => v === null || v === undefined ? '—' : pct(v, 1);
+  const k = (cls, titre, valeur, sous) => `<div class="kpi ${cls ? 'k-' + cls : ''}"><span>${titre}</span><strong>${valeur}</strong><small>${sous}</small></div>`;
+  $('#resume').innerHTML = `
+    <div class="groupe-kpi"><h3>Rentabilité de l'immeuble</h3><div class="kpis">
+      ${k('', 'Prix analysé', a.prix ? argent(a.prix) : '—', `${a.n ? a.n + ' logements' : ''}${a.prixPorte ? ' · ' + argent(a.prixPorte) + '/porte' : ''}`)}
+      ${k('', 'Revenu net (RNE)', argent(a.rne), `${argent(a.rnePorte)} par porte par an`)}
+      ${k(a.cote.tga, 'TGA', pct(a.tga), 'taux global d\'actualisation')}
+      ${k(a.cote.mrb, 'MRB', nombre(a.mrb), `MRN ${nombre(a.mrn)}`)}
+    </div></div>
+    <div class="groupe-kpi"><h3>Financement ${esc(s.nom)}</h3><div class="kpis">
+      ${k(a.cote.rcd, 'RCD', a.rne ? (s.passe ? 'Passe' : 'Ne passe pas') : '—', a.rne ? `${nombre(s.rcdAuMax)} à ${pct(s.ltv, 0)} · exigé ${nombre(s.rcd)}` : '')}
+      ${k(s.cfMois >= 0 ? a.cote.cf : 'faible', 'Cash flow net', argent(s.cfMois) + '/mois', `${argent(s.liquidites)} par an`)}
+      ${k(a.cote.cf, 'Cash flow par porte', argent(s.cfPorteMois) + '/mois', 'après hypothèque')}
+      ${k('', 'Argent requis', a.prix ? argent(s.cash) : '—', s.passe ? `mise de ${pct(s.misePct, 1)} + frais` : `mise de ${pct(s.misePct, 1)} (dont ${argent(s.miseSupplementaire)} de plus)`)}
+    </div></div>
+    <div class="groupe-kpi"><h3>Rendement</h3><div class="kpis">
+      ${k('', 'Rendement sur liquidités', pct(s.rendLiquidites, 1), 'cash flow ÷ argent investi')}
+      ${k('', 'Rendement total an 1', pct(s.rendTotal, 1), 'cash flow + capital + valeur')}
+      ${k('', 'TRI sur 10 ans', triTxt(s.tri), `revente an 10 · multiple ${nombre(s.multiple)}×`)}
+      ${k(s.pointMort > 95 ? 'faible' : s.pointMort > 88 ? 'moyen' : 'bon', 'Occupation minimale', pct(s.pointMort, 1), 'point mort, hypothèque incluse')}
+    </div></div>
+    <div class="verdict"><strong>${esc(a.verdict)}</strong>${!s.passe && a.rne ? `<p class="avertir">Au ${pct(s.ltv, 0)} demandé, le RCD serait de ${nombre(s.rcdAuMax)} alors que le prêteur exige ${nombre(s.rcd)}. Le prêt serait réduit à ${argent(s.pret)} : prévois ${argent(s.miseSupplementaire)} de mise de fonds en plus.</p>` : ''}${a.alertes.length ? `<ul>${a.alertes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>`;
 
-  $('#resume').innerHTML = `<div class="kpis">
-      <div class="kpi"><span>Prix analysé</span><strong>${a.prix ? argent(a.prix) : '—'}</strong><small>${a.n ? a.n + ' logements' : ''}${a.prixPorte ? ' · ' + argent(a.prixPorte) + '/porte' : ''}</small></div>
-      <div class="kpi k-${a.cote.tga}"><span>TGA</span><strong>${pct(a.tga)}</strong><small>RNE ${argent(a.rne)}</small></div>
-      <div class="kpi k-${a.cote.mrb}"><span>MRB</span><strong>${nombre(a.mrb)}</strong><small>MRN ${nombre(a.mrn)}</small></div>
-      <div class="kpi k-${a.cote.cf}"><span>Liquidités SCHL</span><strong>${argent(s.cfPorteMois)}</strong><small>par porte par mois · ${argent(s.liquidites)}/an</small></div>
-      <div class="kpi"><span>Mise totale SCHL</span><strong>${a.prix ? argent(s.cash) : '—'}</strong><small>${pct(s.misePct, 1)} de mise + frais</small></div>
-      <div class="kpi"><span>Rendement an 1</span><strong>${pct(s.rendTotal, 1)}</strong><small>liquidités + capital + valeur</small></div>
-    </div>
-    <div class="verdict"><strong>${esc(a.verdict)}</strong>${a.alertes.length ? `<ul>${a.alertes.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}</div>`;
+  // Ratios
+  $('#s-ratios').innerHTML = `<h2>Ratios</h2><div class="ratios">
+    <div><span>Revenus par porte</span><strong>${argent(a.revenusPorte)}/an</strong></div>
+    <div><span>Loyer moyen</span><strong>${argent(a.loyerMoyenActuel)}/mois</strong></div>
+    <div><span>Dépenses par porte</span><strong>${argent(a.depPorte)}/an</strong></div>
+    <div><span>Ratio des dépenses</span><strong>${pct(a.ratioDep, 1)}</strong></div>
+    <div><span>RNE par porte</span><strong>${argent(a.rnePorte)}/an</strong></div>
+    <div><span>Prix ÷ évaluation</span><strong>${a.prixEval ? nombre(a.prixEval) + '×' : '—'}</strong></div>
+    <div><span>Prix au pi²</span><strong>${a.prixPi2 ? argent(a.prixPi2) : '—'}</strong></div>
+    <div><span>Coût total d'acquisition</span><strong>${argent(a.coutTotal)}</strong></div>
+  </div>`;
+
+  // Tests de résistance
+  $('#s-stress').innerHTML = `<h2>Tests de résistance <span class="discret petit">(${esc(s.nom)})</span></h2>
+    <p class="discret petit">Ce qui arrive au cash flow si les choses tournent moins bien. Le RCD en rouge est sous le minimum exigé de ${nombre(s.rcd)}.</p>
+    <div class="defile"><table class="grille compacte"><thead><tr><th>Scénario</th><th class="num">Cash flow /an</th><th class="num">Par porte /mois</th><th class="num">RCD</th></tr></thead><tbody>
+      <tr class="total"><td>Situation de base</td><td class="num ${s.liquidites < 0 ? 'neg' : ''}">${argent(s.liquidites)}</td><td class="num">${argent(s.cfPorteMois)}</td><td class="num">${nombre(s.rcdReel)}</td></tr>
+      ${s.stress.map(x => `<tr><td>${esc(x.nom)}</td><td class="num ${x.cf < 0 ? 'neg' : ''}">${argent(x.cf)}</td><td class="num ${x.cf < 0 ? 'neg' : ''}">${argent(x.cfPorteMois)}</td><td class="num ${x.rcd < s.rcd ? 'neg' : 'pos'}">${nombre(x.rcd)}</td></tr>`).join('')}
+    </tbody></table></div>`;
 
   // Revenus : pied du tableau
   const pl = $('#pied-logements');
@@ -619,21 +658,29 @@ function majResultats() {
   // Financement
   for (const sc of SCENARIOS) {
     const f = a.fin[sc.cle];
-    $('#fin-' + sc.cle).innerHTML = `<dl>
-      <dt>Prêt</dt><dd>${argent(f.pret)}</dd>
+    $('#fin-' + sc.cle).innerHTML = `
+      <div class="badge-rcd ${!a.rne ? '' : f.passe ? 'ok' : 'non'}">${!a.rne ? 'Entre les revenus' : f.passe ? `Passe à ${pct(f.ltv, 0)}` : `Ne passe pas à ${pct(f.ltv, 0)}`}<small>RCD ${nombre(f.rcdAuMax)} · exigé ${nombre(f.rcd)}</small></div>
+      <dl>
+      <dt>Prêt accordé</dt><dd>${argent(f.pret)} <small>(${pct(f.ltvEffectif, 1)})</small></dd>
       <dt>Limité par</dt><dd>${f.limite}</dd>
-      ${f.prime ? `<dt>Prime ajoutée</dt><dd>${argent(f.prime)}</dd>` : ''}
+      ${f.prime ? `<dt>Prime SCHL ajoutée</dt><dd>${argent(f.prime)}</dd>` : ''}
       <dt>Paiement</dt><dd>${argent(f.paiementMensuel)}/mois</dd>
       <dt>Mise de fonds</dt><dd>${argent(f.mise)} <small>(${pct(f.misePct, 1)})</small></dd>
+      ${f.miseSupplementaire > 0 ? `<dt>dont mise en plus (RCD)</dt><dd class="neg">${argent(f.miseSupplementaire)}</dd>` : ''}
       <dt>Taxe de bienvenue</dt><dd>${argent(a.dmi)}</dd>
       <dt>Frais divers et travaux</dt><dd>${argent(a.fraisDivers + a.travaux)}</dd>
       <dt class="fort">Argent requis</dt><dd class="fort">${argent(f.cash)}</dd>
-      <dt>Liquidités</dt><dd class="${f.liquidites < 0 ? 'neg' : ''}">${argent(f.liquidites)}/an</dd>
+      <dt class="fort">Cash flow net</dt><dd class="fort ${f.liquidites < 0 ? 'neg' : ''}">${argent(f.cfMois)}/mois</dd>
+      <dt>Par an</dt><dd class="${f.liquidites < 0 ? 'neg' : ''}">${argent(f.liquidites)}</dd>
       <dt>Par porte</dt><dd>${argent(f.cfPorteMois)}/mois</dd>
       <dt>RCD réel</dt><dd>${nombre(f.rcdReel)}</dd>
-      <dt>Rendement liquidités</dt><dd>${pct(f.rendLiquidites, 1)}</dd>
+      <dt>Occupation minimale</dt><dd>${pct(f.pointMort, 1)}</dd>
+      <dt>Rendement sur liquidités</dt><dd>${pct(f.rendLiquidites, 1)}</dd>
       <dt>Capitalisation an 1</dt><dd>${argent(f.capitalisation)}</dd>
-      <dt class="fort">Rendement total an 1</dt><dd class="fort">${pct(f.rendTotal, 1)}</dd>
+      <dt>Rendement total an 1</dt><dd>${pct(f.rendTotal, 1)}</dd>
+      <dt class="fort">TRI sur 10 ans</dt><dd class="fort">${f.tri === null ? '—' : pct(f.tri, 1)}</dd>
+      <dt>Multiple du capital</dt><dd>${nombre(f.multiple)}×</dd>
+      <dt>Récupération de la mise</dt><dd>${f.recuperation ? f.recuperation + ' ans' : 'plus de 10 ans'}</dd>
     </dl>`;
   }
 
@@ -700,10 +747,14 @@ function vueComparer(ids) {
     ['MRB', x => nombre(x.a.mrb), x => -x.a.mrb],
     ['Ratio des dépenses', x => pct(x.a.ratioDep, 1), null],
     ['Loyer moyen', x => argent(x.a.loyerMoyenActuel), null],
+    ['RCD SCHL au prêt max', x => `${nombre(x.a.fin.schl.rcdAuMax)} ${x.a.fin.schl.passe ? '(passe)' : '(ne passe pas)'}`, x => x.a.fin.schl.rcdAuMax],
+    ['Cash flow net SCHL /mois', x => argent(x.a.fin.schl.cfMois), x => x.a.fin.schl.cfMois],
     ['Argent requis SCHL', x => argent(x.a.fin.schl.cash), x => -x.a.fin.schl.cash],
     ['Liquidités SCHL /an', x => argent(x.a.fin.schl.liquidites), x => x.a.fin.schl.liquidites],
     ['Liquidités SCHL /porte/mois', x => argent(x.a.fin.schl.cfPorteMois), x => x.a.fin.schl.cfPorteMois],
     ['Rendement total an 1 SCHL', x => pct(x.a.fin.schl.rendTotal, 1), x => x.a.fin.schl.rendTotal],
+    ['TRI 10 ans SCHL', x => x.a.fin.schl.tri === null ? '—' : pct(x.a.fin.schl.tri, 1), x => x.a.fin.schl.tri ?? -999],
+    ['Occupation minimale SCHL', x => pct(x.a.fin.schl.pointMort, 1), x => -x.a.fin.schl.pointMort],
     ['Argent requis conventionnel', x => argent(x.a.fin.conv.cash), x => -x.a.fin.conv.cash],
     ['Liquidités conv. /porte/mois', x => argent(x.a.fin.conv.cfPorteMois), x => x.a.fin.conv.cfPorteMois],
     ['Prix au TGA cible', x => `${argent(Math.round(x.a.cibles.prixB / 1000) * 1000)} à ${argent(Math.round(x.a.cibles.prixA / 1000) * 1000)}`, null],
@@ -751,7 +802,8 @@ function vueReglages() {
       ${rc('hyp.appreciation', 'Appréciation annuelle', D.hyp.appreciation, '%')}
       ${rc('hyp.hausse_loyers', 'Hausse des loyers par an', D.hyp.hausse_loyers, '%')}
       ${rc('hyp.hausse_depenses', 'Hausse des dépenses par an', D.hyp.hausse_depenses, '%')}
-      <label class="champ"><span>Scénario de la projection</span><select id="r-scenario">${SCENARIOS.map(s => `<option value="${s.cle}" ${(r.scenario_projection || 'schl') === s.cle ? 'selected' : ''}>${s.nom}</option>`).join('')}</select></label>
+      ${rc('hyp.frais_vente', 'Frais de revente (pour le TRI)', D.hyp.frais_vente, '%')}
+      <label class="champ"><span>Scénario principal (résumé, liste, projection)</span><select id="r-scenario">${SCENARIOS.map(s => `<option value="${s.cle}" ${(r.scenario_projection || 'schl') === s.cle ? 'selected' : ''}>${s.nom}</option>`).join('')}</select></label>
     </div></section>
     <section class="carte"><h2>Financement par défaut</h2><div class="scenarios">${SCENARIOS.map(s => `<div class="scenario"><h3>${s.nom}</h3><div class="champs serre">
       ${rc(`fin.${s.cle}.taux`, 'Taux', D.fin[s.cle].taux, '%')}

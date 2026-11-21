@@ -11,7 +11,8 @@ export const REGLAGES_DEFAUT = {
     frais_divers_pct: 1,      // notaire, inspection, évaluation, Phase 1, frais SCHL (% du prix)
     appreciation: 2,          // % par an
     hausse_loyers: 2.5,       // % par an
-    hausse_depenses: 2.5      // % par an
+    hausse_depenses: 2.5,     // % par an
+    frais_vente: 4            // % du prix de vente à la sortie (courtier, notaire), pour le TRI
   },
   fin: {
     conv: { taux: 4.75, amort: 25, ltv: 75, rcd: 1.2, prime: 0 },
@@ -181,7 +182,21 @@ function financer(rne, prix, f) {
   const mise = prix - pret;
   const liquidites = rne - service;
   const capitalisation = pretTotal - soldeApres(pretTotal, f.taux, f.amort, 12);
-  return { ...f, parRcd, parLtv, pret, limite, prime, pretTotal, paiementMensuel: pm, service, mise, misePct: prix ? mise / prix * 100 : 0, liquidites, rcdReel: service ? rne / service : 0, capitalisation };
+  // Est-ce que le prêt maximal (ratio prêt-valeur) passe le RCD exigé?
+  const serviceAuMax = paiementMensuel(parLtv * (1 + f.prime / 100), f.taux, f.amort) * 12;
+  const rcdAuMax = serviceAuMax ? rne / serviceAuMax : 0;
+  const passe = rne > 0 && rcdAuMax >= f.rcd - 1e-9;
+  return { ...f, parRcd, parLtv, pret, limite, prime, pretTotal, paiementMensuel: pm, service, mise, misePct: prix ? mise / prix * 100 : 0,
+    liquidites, cfMois: liquidites / 12, rcdReel: service ? rne / service : 0, capitalisation,
+    rcdAuMax, passe, miseSupplementaire: Math.max(0, parLtv - pret), ltvEffectif: prix ? pret / prix * 100 : 0 };
+}
+
+function tri(flux) {
+  const van = r => flux.reduce((t, f, k) => t + f / Math.pow(1 + r, k), 0);
+  let bas = -0.99, haut = 1.5;
+  if (van(bas) * van(haut) > 0) return null;
+  for (let k = 0; k < 200; k++) { const m = (bas + haut) / 2; if (van(bas) * van(m) <= 0) haut = m; else bas = m; }
+  return (bas + haut) / 2 * 100;
 }
 
 export function analyser(imm, reglages) {
@@ -213,6 +228,7 @@ export function analyser(imm, reglages) {
     r.cfPorteMois = n ? r.liquidites / n / 12 : 0;
     r.rendLiquidites = r.cash > 0 ? r.liquidites / r.cash * 100 : 0;
     r.rendTotal = r.cash > 0 ? (r.liquidites + r.capitalisation + appreciation1) / r.cash * 100 : 0;
+    r.pointMort = ex.rba ? (ex.depNorm + r.service) / ex.rba * 100 : 0;
     fin[s.cle] = r;
   }
 
@@ -241,28 +257,55 @@ export function analyser(imm, reglages) {
     potentiel.valeurB = R.cibles.tga_b ? exM.rne / (R.cibles.tga_b / 100) : 0;
   }
 
-  // Projection sur 10 ans selon le scénario choisi
-  const sc = fin[R.scenario_projection] || fin.schl;
-  const projection = [];
-  let cumul = 0;
-  for (let a = 1; a <= 10; a++) {
-    const fr = Math.pow(1 + H.hausse_loyers / 100, a - 1);
-    const fd = Math.pow(1 + H.hausse_depenses / 100, a - 1);
-    const eff = ex.effectif * fr;
-    const gestion = (ex.lignes.find(l => l.cle === 'gestion') || { norm: 0 }).norm * fr;
-    const rne = eff - (depSansGestion * fd + gestion);
-    const cf = rne - sc.service;
-    cumul += cf;
-    const valeur = prix * Math.pow(1 + H.appreciation / 100, a);
-    const solde = soldeApres(sc.pretTotal, sc.taux, sc.amort, a * 12);
-    projection.push({ annee: a, rne, liquidites: cf, cumul, valeur, solde, equite: valeur - solde });
+  // Projection sur 10 ans, pour chaque scénario
+  const gestionNorm = (ex.lignes.find(l => l.cle === 'gestion') || { norm: 0 }).norm;
+  const projeter = sc => {
+    const lignes = []; let cumul = 0;
+    for (let a = 1; a <= 10; a++) {
+      const fr = Math.pow(1 + H.hausse_loyers / 100, a - 1);
+      const fd = Math.pow(1 + H.hausse_depenses / 100, a - 1);
+      const rne = ex.effectif * fr - (depSansGestion * fd + gestionNorm * fr);
+      const cf = rne - sc.service;
+      cumul += cf;
+      const valeur = prix * Math.pow(1 + H.appreciation / 100, a);
+      const solde = soldeApres(sc.pretTotal, sc.taux, sc.amort, a * 12);
+      lignes.push({ annee: a, rne, liquidites: cf, cumul, valeur, solde, equite: valeur - solde });
+    }
+    return lignes;
+  };
+  for (const s of SCENARIOS) {
+    const r = fin[s.cle];
+    const pr = projeter(r);
+    const fin10 = pr[9];
+    const produitVente = fin10.valeur * (1 - H.frais_vente / 100) - fin10.solde;
+    const flux = [-r.cash, ...pr.map(x => x.liquidites)];
+    flux[10] += produitVente;
+    r.tri = r.cash > 0 ? tri(flux) : null;
+    r.multiple = r.cash > 0 ? (pr.reduce((t, x) => t + x.liquidites, 0) + produitVente) / r.cash : 0;
+    const k = pr.findIndex(x => x.cumul >= r.cash);
+    r.recuperation = k >= 0 ? k + 1 : null;
+    r.produitVente = produitVente;
+    r.projection = pr;
+    // Tests de résistance
+    const rneAvec = inocc => exploitation(d, { ...H, inoccupation: inocc }).rne;
+    const svc = t => paiementMensuel(r.pretTotal, t, r.amort) * 12;
+    r.stress = [
+      { nom: `Taux à ${fmtPct(r.taux + 1)} au renouvellement`, rne: ex.rne, service: svc(r.taux + 1) },
+      { nom: `Taux à ${fmtPct(r.taux + 2)} au renouvellement`, rne: ex.rne, service: svc(r.taux + 2) },
+      { nom: 'Inoccupation à 5 %', rne: rneAvec(5), service: r.service },
+      { nom: 'Inoccupation à 10 %', rne: rneAvec(10), service: r.service },
+      { nom: 'Dépenses 10 % plus élevées', rne: ex.rne - ex.depNorm * 0.1, service: r.service }
+    ].map(x => ({ ...x, cf: x.rne - x.service, rcd: x.service ? x.rne / x.service : 0, cfPorteMois: n ? (x.rne - x.service) / n / 12 : 0 }));
   }
+  const sc = fin[R.scenario_projection] || fin.schl;
+  const projection = sc.projection;
 
   const S = R.seuils;
   const cote = {
     tga: tga >= S.tga_bon ? 'bon' : tga >= S.tga_ok ? 'moyen' : 'faible',
     mrb: !mrb ? 'moyen' : mrb <= S.mrb_bon ? 'bon' : mrb <= S.mrb_ok ? 'moyen' : 'faible',
-    cf: fin.schl.cfPorteMois >= S.cf_bon ? 'bon' : fin.schl.cfPorteMois >= S.cf_ok ? 'moyen' : 'faible'
+    cf: sc.cfPorteMois >= S.cf_bon ? 'bon' : sc.cfPorteMois >= S.cf_ok ? 'moyen' : 'faible',
+    rcd: sc.passe ? 'bon' : 'faible'
   };
 
   const alertes = [];
@@ -276,10 +319,13 @@ export function analyser(imm, reglages) {
 
   return {
     n, prix, prixDemande, evaluation, prixEval: evaluation ? prix / evaluation : 0,
+    superficie: nb(d.superficie), prixPi2: nb(d.superficie) ? prix / nb(d.superficie) : 0,
+    revenusPorte: n ? ex.rba / n : 0, depPorte: n ? ex.depNorm / n : 0, rnePorte: n ? ex.rne / n : 0,
+    coutTotal: prix + dmi + fraisDivers + travaux,
     H, F, R, ex, rba: ex.rba, rne: ex.rne, tga, mrb, mrn, prixPorte, ratioDep,
     dmi, fraisDivers, travaux, fin,
     cibles: { a: R.cibles.tga_a, b: R.cibles.tga_b, prixA: prixCible(R.cibles.tga_a), prixB: prixCible(R.cibles.tga_b) },
-    loyerMoyenActuel, loyerMoyenRequis, potentiel, projection, scenarioProjection: sc.nom,
+    loyerMoyenActuel, loyerMoyenRequis, potentiel, projection, scenarioProjection: sc.nom, principal: sc, clePrincipal: R.fin[R.scenario_projection] ? R.scenario_projection : 'schl',
     cote, alertes, verdict: verdict(tga, prix, prixCible(R.cibles.tga_a), prixCible(R.cibles.tga_b), cote, R)
   };
 }
