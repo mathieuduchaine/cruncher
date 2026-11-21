@@ -195,6 +195,38 @@ async function numeriser(fichier) {
   } catch (e) { finVoile(); toast('Numérisation impossible : ' + e.message, 6000); }
 }
 
+// Complète la fiche sans écraser ce qui est déjà rempli.
+function fusionner(d, nouv) {
+  const vides = ['', 'Carte à compléter', 'Contact sans nom', 'Nouveau contact', 'Sans nom'];
+  let change = 0;
+  for (const [k] of CHAMPS) {
+    if (k === 'rencontre' || !nouv[k]) continue;
+    const actuel = String(d[k] || '').trim();
+    const remplacable = !actuel || (k === 'nom' && (vides.includes(actuel) || actuel === d.entreprise));
+    if (remplacable && nouv[k] !== actuel) { d[k] = nouv[k]; change++; }
+  }
+  if ((!d.categorie || d.categorie === 'Autre') && nouv.categorie && nouv.categorie !== 'Autre') { d.categorie = nouv.categorie; change++; }
+  if (nouv.notes && !String(d.notes || '').includes(nouv.notes)) { d.notes = d.notes ? d.notes + '\n' + nouv.notes : nouv.notes; change++; }
+  return change;
+}
+
+async function blobDe(chemin) {
+  const u = await urlPhoto(chemin);
+  if (!u) throw new Error('Photo introuvable');
+  const r = await fetch(u);
+  if (!r.ok) throw new Error('Photo introuvable');
+  return r.blob();
+}
+
+// Relit toutes les photos de la carte (recto et verso) et complète la fiche.
+async function relire(c, blobsConnus = {}) {
+  const d = c.donnees;
+  const blobs = [];
+  for (const ch of d.photos.slice(0, 2)) blobs.push(blobsConnus[ch] || await blobDe(ch));
+  const nouv = nettoyer(await lireCarte(blobs));
+  return fusionner(d, nouv);
+}
+
 /* ---------- Liste ---------- */
 export async function vueContacts() {
   if (!etat.contacts) await chargerContacts();
@@ -295,6 +327,7 @@ export async function vueContact(id) {
         <div class="barre-actions">
           <button class="btn" id="b-photo-c">${d.photos.length ? 'Ajouter le verso' : 'Photographier la carte'}</button><input type="file" accept="image/*" capture="environment" hidden id="f-ajout-photo">
           <label class="btn">Choisir une photo<input type="file" accept="image/*" hidden id="f-ajout-photo2"></label>
+          ${d.photos.length ? '<button class="btn" id="b-relire">Relire la carte</button>' : ''}
         </div>
       </section>
     </div>`;
@@ -312,8 +345,15 @@ export async function vueContact(id) {
       voile('Envoi de la photo…');
       const blob = await reduire(f);
       const ch = await televerser(c, blob, d.photos.length ? 'verso' : 'recto');
-      d.photos.push(ch); await sauver(); finVoile(); photos();
-      $('#b-photo-c').textContent = 'Ajouter le verso';
+      d.photos.push(ch); await sauver();
+      voile('Lecture de la carte…');
+      let n = 0;
+      try { n = await relire(c, { [ch]: blob }); }
+      catch (e) { toast('Photo ajoutée, mais lecture impossible : ' + e.message, 6000); }
+      await sauver(); finVoile();
+      if (n) toast(`Fiche complétée avec le ${d.photos.length > 1 ? 'verso' : 'recto'}. Vérifie les informations.`, 4000);
+      else toast('Photo ajoutée. Aucune nouvelle information trouvée.', 4000);
+      vueContact(c.id);
     } catch (err) { finVoile(); toast('Envoi impossible : ' + err.message, 5000); }
   };
   const ajouter = e => { const f = e.target.files[0]; e.target.value = ''; if (f) ajouterBlob(f); };
@@ -321,6 +361,15 @@ export async function vueContact(id) {
   $('#f-ajout-photo2').onchange = ajouter;
   $('#b-photo-c').onclick = async () => { const b = await photographier(d.photos.length ? 'Photographier le verso' : 'Photographier la carte', $('#f-ajout-photo')); if (b) ajouterBlob(b); };
   $('#b-vcard').onclick = () => vcard(d);
+  if ($('#b-relire')) $('#b-relire').onclick = async () => {
+    try {
+      await sauver(); voile('Lecture de la carte…');
+      const n = await relire(c);
+      await sauver(); finVoile();
+      toast(n ? 'Fiche complétée. Ce que tu avais déjà écrit n\'a pas été changé.' : 'Aucune nouvelle information trouvée sur la carte.', 4500);
+      vueContact(c.id);
+    } catch (e) { finVoile(); toast('Lecture impossible : ' + e.message, 6000); }
+  };
   $('#b-effacer-c').onclick = async () => {
     if (!confirm(`Supprimer le contact « ${d.nom || 'sans nom'} »?`)) return;
     clearTimeout(attente); attente = null;
