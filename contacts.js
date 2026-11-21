@@ -65,7 +65,9 @@ function ouvrirCamera(titre) {
     const fond = document.createElement('div');
     fond.className = 'camera-fond';
     fond.innerHTML = `<div class="camera-boite">
-      <div class="camera-tete"><strong>${esc(titre)}</strong><select id="cam-choix" aria-label="Caméra"></select></div>
+      <div class="camera-tete"><strong>${esc(titre)}</strong>
+        <div class="camera-choix"><label class="discret petit" for="cam-choix">Caméra</label><select id="cam-choix"></select><button class="btn mini" id="cam-chercher">Chercher mon iPhone</button></div></div>
+      <p class="camera-aide" id="cam-aide" hidden>Ton iPhone n'est pas détecté. Verrouille-le, pose-le immobile à l'horizontale près du Mac, puis clique sur « Chercher mon iPhone ». Il apparaîtra dans le menu Caméra.</p>
       <div class="camera-vue"><video id="cam-video" playsinline autoplay muted></video><div class="camera-cadre"></div><p id="cam-msg">Connexion à la caméra…</p></div>
       <p class="discret petit centre">Ton iPhone devrait s'allumer tout seul s'il est près du Mac. Place la carte dans le cadre.</p>
       <div class="camera-actions"><button class="btn" id="cam-annuler">Annuler</button><button class="btn principal" id="cam-prendre" disabled>Prendre la photo</button></div>
@@ -74,7 +76,8 @@ function ouvrirCamera(titre) {
     const video = fond.querySelector('#cam-video'), choix = fond.querySelector('#cam-choix'), msg = fond.querySelector('#cam-msg'), prendre = fond.querySelector('#cam-prendre');
     let flux = null;
     const arreter = () => { if (flux) flux.getTracks().forEach(t => t.stop()); flux = null; };
-    const fermer = () => { arreter(); fond.remove(); };
+    let surChangement = null;
+    const fermer = () => { arreter(); fond.remove(); if (surChangement) navigator.mediaDevices.removeEventListener('devicechange', surChangement); };
     const demarrer = async (deviceId) => {
       arreter(); prendre.disabled = true; msg.hidden = false; msg.textContent = 'Connexion à la caméra…';
       try {
@@ -96,14 +99,35 @@ function ouvrirCamera(titre) {
       cv.getContext('2d').drawImage(video, 0, 0);
       cv.toBlob(b => { fermer(); b ? ok(b) : annule(new Error('Photo vide')); }, 'image/jpeg', 0.9);
     };
+    const aide = fond.querySelector('#cam-aide');
+    let actuel = null;
+    const lister = async (basculerVersIphone) => {
+      const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+      const iphone = cams.find(d => /iphone|continuit/i.test(d.label));
+      if (basculerVersIphone && iphone && iphone.deviceId !== actuel) {
+        const r = await demarrer(iphone.deviceId);
+        if (r) { actuel = r; garderCamera(iphone.deviceId); }
+      }
+      choix.innerHTML = cams.length
+        ? cams.map((d, k) => `<option value="${esc(d.deviceId)}" ${d.deviceId === actuel ? 'selected' : ''}>${esc(d.label || 'Caméra ' + (k + 1))}</option>`).join('')
+        : '<option>Aucune caméra</option>';
+      aide.hidden = !!iphone;
+      return !!iphone;
+    };
     // Premier démarrage, puis choix automatique de l'iPhone s'il est disponible.
-    let actuel = await demarrer(lireCamera() || undefined);
+    actuel = await demarrer(lireCamera() || undefined);
     if (actuel === null && lireCamera()) actuel = await demarrer();
-    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
-    const iphone = cams.find(d => /iphone|continuit/i.test(d.label));
-    if (!lireCamera() && iphone && iphone.deviceId !== actuel) actuel = await demarrer(iphone.deviceId) || actuel;
-    choix.innerHTML = cams.map((d, k) => `<option value="${esc(d.deviceId)}" ${d.deviceId === actuel ? 'selected' : ''}>${esc(d.label || 'Caméra ' + (k + 1))}</option>`).join('');
-    choix.hidden = cams.length < 2;
+    await lister(!lireCamera());
+    // Si l'iPhone se connecte pendant que la fenêtre est ouverte, on bascule dessus.
+    surChangement = () => { if (document.body.contains(fond)) lister(true); };
+    navigator.mediaDevices.addEventListener('devicechange', surChangement);
+    fond.querySelector('#cam-chercher').onclick = async e => {
+      e.target.disabled = true; e.target.textContent = 'Recherche…';
+      let trouve = await lister(true);
+      for (let k = 0; !trouve && k < 5; k++) { await new Promise(r => setTimeout(r, 1500)); trouve = await lister(true); }
+      e.target.disabled = false; e.target.textContent = 'Chercher mon iPhone';
+      if (!trouve) toast('iPhone introuvable. Vérifie qu\'il est verrouillé, immobile et à l\'horizontale, avec Wi-Fi et Bluetooth.', 6000);
+    };
   });
 }
 

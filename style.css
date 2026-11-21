@@ -270,3 +270,7 @@ main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
 .camera-cadre { position: absolute; inset: 18% 10%; border: 2px dashed rgba(241, 212, 145, 0.9); border-radius: 10px; pointer-events: none; }
 #cam-msg { position: absolute; inset: auto 0 45% 0; text-align: center; color: #fff; margin: 0; padding: 0 20px; }
 .camera-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.camera-choix { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.camera-choix select { width: auto; max-width: 260px; padding: 5px 8px; font-size: 0.86rem; }
+.camera-aide { margin: 0; padding: 8px 10px; border-radius: 8px; background: rgba(176, 120, 28, 0.1); color: var(--moyen); font-size: 0.86rem; }
+@media (max-width: 640px) { .camera-tete { flex-direction: column; align-items: stretch; } }
