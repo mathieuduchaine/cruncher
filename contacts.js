@@ -54,6 +54,66 @@ function enBase64(blob) {
   return new Promise(ok => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.readAsDataURL(blob); });
 }
 
+/* ---------- Appareil photo dans la page (Mac : iPhone par Caméra de continuité) ---------- */
+const estMobile = () => /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(navigator.userAgent) && window.innerWidth < 1100);
+function lireCamera() { try { return localStorage.getItem('cruncher-camera') || ''; } catch { return ''; } }
+function garderCamera(id) { try { localStorage.setItem('cruncher-camera', id); } catch { /* rien */ } }
+
+function ouvrirCamera(titre) {
+  return new Promise(async (ok, annule) => {
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return annule(new Error('Ce navigateur ne permet pas d\'utiliser la caméra.'));
+    const fond = document.createElement('div');
+    fond.className = 'camera-fond';
+    fond.innerHTML = `<div class="camera-boite">
+      <div class="camera-tete"><strong>${esc(titre)}</strong><select id="cam-choix" aria-label="Caméra"></select></div>
+      <div class="camera-vue"><video id="cam-video" playsinline autoplay muted></video><div class="camera-cadre"></div><p id="cam-msg">Connexion à la caméra…</p></div>
+      <p class="discret petit centre">Ton iPhone devrait s'allumer tout seul s'il est près du Mac. Place la carte dans le cadre.</p>
+      <div class="camera-actions"><button class="btn" id="cam-annuler">Annuler</button><button class="btn principal" id="cam-prendre" disabled>Prendre la photo</button></div>
+    </div>`;
+    document.body.appendChild(fond);
+    const video = fond.querySelector('#cam-video'), choix = fond.querySelector('#cam-choix'), msg = fond.querySelector('#cam-msg'), prendre = fond.querySelector('#cam-prendre');
+    let flux = null;
+    const arreter = () => { if (flux) flux.getTracks().forEach(t => t.stop()); flux = null; };
+    const fermer = () => { arreter(); fond.remove(); };
+    const demarrer = async (deviceId) => {
+      arreter(); prendre.disabled = true; msg.hidden = false; msg.textContent = 'Connexion à la caméra…';
+      try {
+        flux = await navigator.mediaDevices.getUserMedia({ video: deviceId ? { deviceId: { exact: deviceId }, width: { ideal: 1920 }, height: { ideal: 1440 } } : { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1440 } }, audio: false });
+        video.srcObject = flux; await video.play().catch(() => {});
+        msg.hidden = true; prendre.disabled = false;
+        const actuel = flux.getVideoTracks()[0].getSettings().deviceId;
+        return actuel;
+      } catch (e) {
+        msg.textContent = e.name === 'NotAllowedError' ? 'Accès à la caméra refusé. Autorise la caméra pour ce site dans Safari (Réglages pour ce site web).' : 'Caméra introuvable : ' + e.message;
+        return null;
+      }
+    };
+    fond.querySelector('#cam-annuler').onclick = () => { fermer(); annule(new Error('annule')); };
+    choix.onchange = async () => { garderCamera(choix.value); await demarrer(choix.value); };
+    prendre.onclick = () => {
+      const cv = document.createElement('canvas');
+      cv.width = video.videoWidth; cv.height = video.videoHeight;
+      cv.getContext('2d').drawImage(video, 0, 0);
+      cv.toBlob(b => { fermer(); b ? ok(b) : annule(new Error('Photo vide')); }, 'image/jpeg', 0.9);
+    };
+    // Premier démarrage, puis choix automatique de l'iPhone s'il est disponible.
+    let actuel = await demarrer(lireCamera() || undefined);
+    if (actuel === null && lireCamera()) actuel = await demarrer();
+    const cams = (await navigator.mediaDevices.enumerateDevices()).filter(d => d.kind === 'videoinput');
+    const iphone = cams.find(d => /iphone|continuit/i.test(d.label));
+    if (!lireCamera() && iphone && iphone.deviceId !== actuel) actuel = await demarrer(iphone.deviceId) || actuel;
+    choix.innerHTML = cams.map((d, k) => `<option value="${esc(d.deviceId)}" ${d.deviceId === actuel ? 'selected' : ''}>${esc(d.label || 'Caméra ' + (k + 1))}</option>`).join('');
+    choix.hidden = cams.length < 2;
+  });
+}
+
+// Sur iPhone : l'appareil photo natif. Sur ordinateur : la caméra dans la page.
+async function photographier(titre, inputMobile) {
+  if (estMobile()) { inputMobile.click(); return null; }
+  try { return await ouvrirCamera(titre); }
+  catch (e) { if (e.message !== 'annule') { toast(e.message + ' Choisis plutôt une photo.', 5000); } return null; }
+}
+
 async function creerContact(donnees) {
   const d = { categorie: 'Autre', notes: '', photos: [], ...donnees };
   const ligne = { user_id: etat.session.user.id, nom: d.nom || 'Nouveau contact', entreprise: d.entreprise || '', categorie: d.categorie, donnees: d };
@@ -118,7 +178,7 @@ export async function vueContacts() {
   v.innerHTML = `<div class="barre">
       <h1>Contacts</h1>
       <div class="barre-actions">
-        <label class="btn principal">Numériser une carte<input type="file" accept="image/*" capture="environment" hidden id="f-carte"></label>
+        <button class="btn principal" id="b-numeriser">Numériser une carte</button><input type="file" accept="image/*" capture="environment" hidden id="f-carte">
         <label class="btn">Choisir une photo<input type="file" accept="image/*" hidden id="f-carte-photo"></label>
         <button class="btn" id="b-contact">Ajouter à la main</button>
       </div>
@@ -131,6 +191,7 @@ export async function vueContacts() {
     <div id="liste-contacts" class="contacts"></div>`;
   dessiner();
   $('#f-carte').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) numeriser(f); };
+  $('#b-numeriser').onclick = async () => { const b = await photographier('Numériser une carte d\'affaires', $('#f-carte')); if (b) numeriser(b); };
   $('#f-carte-photo').onchange = e => { const f = e.target.files[0]; e.target.value = ''; if (f) numeriser(f); };
   $('#b-contact').onclick = async () => {
     try { const c = await creerContact({ nom: '' }); aller('#/c/' + c.id); } catch (e) { toast('Création impossible : ' + e.message, 5000); }
@@ -208,7 +269,7 @@ export async function vueContact(id) {
         <h2>Carte d'affaires</h2>
         <div class="photos-carte" id="photos-c"></div>
         <div class="barre-actions">
-          <label class="btn">${d.photos.length ? 'Ajouter le verso' : 'Photographier la carte'}<input type="file" accept="image/*" capture="environment" hidden id="f-ajout-photo"></label>
+          <button class="btn" id="b-photo-c">${d.photos.length ? 'Ajouter le verso' : 'Photographier la carte'}</button><input type="file" accept="image/*" capture="environment" hidden id="f-ajout-photo">
           <label class="btn">Choisir une photo<input type="file" accept="image/*" hidden id="f-ajout-photo2"></label>
         </div>
       </section>
@@ -222,17 +283,19 @@ export async function vueContact(id) {
     liens(); planifier();
   };
   v.addEventListener('input', surSaisie);
-  const ajouter = async e => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  const ajouterBlob = async f => {
     try {
       voile('Envoi de la photo…');
       const blob = await reduire(f);
       const ch = await televerser(c, blob, d.photos.length ? 'verso' : 'recto');
       d.photos.push(ch); await sauver(); finVoile(); photos();
+      $('#b-photo-c').textContent = 'Ajouter le verso';
     } catch (err) { finVoile(); toast('Envoi impossible : ' + err.message, 5000); }
   };
+  const ajouter = e => { const f = e.target.files[0]; e.target.value = ''; if (f) ajouterBlob(f); };
   $('#f-ajout-photo').onchange = ajouter;
   $('#f-ajout-photo2').onchange = ajouter;
+  $('#b-photo-c').onclick = async () => { const b = await photographier(d.photos.length ? 'Photographier le verso' : 'Photographier la carte', $('#f-ajout-photo')); if (b) ajouterBlob(b); };
   $('#b-vcard').onclick = () => vcard(d);
   $('#b-effacer-c').onclick = async () => {
     if (!confirm(`Supprimer le contact « ${d.nom || 'sans nom'} »?`)) return;
