@@ -241,3 +241,21 @@ main { max-width: 1280px; margin: 0 auto; padding: 22px 24px 60px; }
 #toast { background: var(--marine); color: #f9f9fa; }
 @media (max-width: 1100px) { .ratios { grid-template-columns: repeat(2, 1fr); } }
 @media (max-width: 860px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+/* Contacts */
+.contacts { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.cat-contacts { grid-column: 1 / -1; margin: 14px 0 2px; color: var(--or); }
+.contact { display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--bord); border-radius: var(--rayon); padding: 10px 12px; cursor: pointer; box-shadow: var(--ombre); min-width: 0; }
+.contact:hover { border-color: var(--or-fonce); }
+.contact-photo { flex: 0 0 64px; height: 40px; border-radius: 6px; background: var(--surface2) center / cover no-repeat; border: 1px solid var(--bord); display: grid; place-items: center; color: var(--doux); font-weight: 700; }
+.contact-texte { flex: 1; min-width: 0; }
+.contact-texte strong, .contact-texte div { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.contact-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.fiche-contact { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start; }
+.liens-rapides { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.photos-carte { display: grid; gap: 12px; margin-bottom: 12px; }
+.photos-carte figure { margin: 0; }
+.photos-carte img { width: 100%; border-radius: 8px; border: 1px solid var(--bord); display: block; background: var(--surface2); min-height: 80px; }
+.photos-carte figcaption { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--doux); margin-top: 4px; }
+@media (max-width: 860px) { .fiche-contact { grid-template-columns: 1fr; } .contacts { grid-template-columns: 1fr; } }
+@media (max-width: 640px) { .fiche-contact .champs { grid-template-columns: 1fr; } .contact-actions .btn { padding: 4px 8px; } }

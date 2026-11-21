@@ -1,5 +1,6 @@
 import { analyser, REGLAGES_DEFAUT, SCENARIOS, POSTES_DEPENSES, STATUTS, nb, reglagesComplets, nombreLogements } from './calc.js';
 import { genererRapport } from './rapport.js';
+import { vueContacts, vueContact, flushContacts, contactsEnAttente } from './contacts.js';
 
 const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.min.mjs';
 const PDFJS_WORKER = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/pdf.worker.min.mjs';
@@ -14,7 +15,7 @@ fetch('logo-clevor-pdf.jpg').then(r => r.ok ? r.blob() : null).then(b => {
 const etat = {
   sb: null, session: null, profil: null, immeubles: [], profils: [],
   courant: null, tri: { col: 'modifie_le', dir: -1 }, selection: new Set(),
-  recherche: '', filtreStatut: '', filtreProprio: '', attente: null, attenteReglages: null
+  recherche: '', filtreStatut: '', filtreProprio: '', attente: null, attenteReglages: null, contacts: null
 };
 
 const $ = s => document.querySelector(s);
@@ -164,6 +165,8 @@ async function router() {
   coquille(vue || 'liste');
   if (vue === 'i' && arg) return vueFiche(arg);
   if (vue === 'comparer') return vueComparer((arg || '').split(',').filter(Boolean));
+  if (vue === 'contacts') return vueContacts();
+  if (vue === 'c' && arg) return vueContact(arg);
   if (vue === 'reglages') return vueReglages();
   if (vue === 'utilisateurs' && etat.profil.est_admin) return vueUtilisateurs();
   vueListe();
@@ -176,6 +179,7 @@ function coquille(vue) {
       <a href="#/" class="logo-lien">${logo()}</a>
       <nav>
         <a href="#/" class="${vue === 'liste' || vue === 'i' || vue === 'comparer' ? 'actif' : ''}">Immeubles</a>
+        <a href="#/contacts" class="${vue === 'contacts' || vue === 'c' ? 'actif' : ''}">Contacts</a>
         <a href="#/reglages" class="${vue === 'reglages' ? 'actif' : ''}">Réglages</a>
         ${admin ? `<a href="#/utilisateurs" class="${vue === 'utilisateurs' ? 'actif' : ''}">Utilisateurs</a>` : ''}
       </nav>
@@ -727,8 +731,8 @@ async function sauver() {
   imm.modifie_le = new Date().toISOString();
   if (s) s.textContent = 'Enregistré ✓';
 }
-async function flush() { if (etat.attente) { clearTimeout(etat.attente); await sauver(); } if (etat.attenteReglages) { clearTimeout(etat.attenteReglages); await sauverReglages(); } }
-window.addEventListener('beforeunload', e => { if (etat.attente || etat.attenteReglages) { flush(); e.preventDefault(); e.returnValue = ''; } });
+async function flush() { await flushContacts(); if (etat.attente) { clearTimeout(etat.attente); await sauver(); } if (etat.attenteReglages) { clearTimeout(etat.attenteReglages); await sauverReglages(); } }
+window.addEventListener('beforeunload', e => { if (etat.attente || etat.attenteReglages || contactsEnAttente()) { flush(); e.preventDefault(); e.returnValue = ''; } });
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') flush(); });
 
 /* ---------- Comparaison ---------- */
@@ -924,5 +928,7 @@ function vueUtilisateurs() {
     vueUtilisateurs();
   });
 }
+
+export { etat, $, esc, toast, voile, finVoile, jeton, aller, proprio, dateCourte };
 
 demarrer().catch(e => { app.innerHTML = `<div class="porte"><div class="porte-boite">${logo()}<p>Erreur au démarrage : ${esc(e.message)}</p></div></div>`; });
